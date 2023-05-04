@@ -1,0 +1,5 @@
+neg      R3
+syscall
+branch   10216
+syscall
+halt

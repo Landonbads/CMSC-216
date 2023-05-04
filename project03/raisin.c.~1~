@@ -1,0 +1,436 @@
+/* Name: Landon Badstibner
+ * Date: 02/27/2023
+ * Terpconnect: landonb
+ * UID: 119011416
+ * Section: 0203
+ *
+ * Project 03 - A program containing 3 functions that read, print, and
+ * manipulate the limited instruction set of the MAD Raisin processor.
+ *
+ * I pledge on my honor that I have not given or received
+ * any unauthorized assistance on this assignment
+ */
+
+#include "raisin.h"
+#include <stdio.h>
+
+/* function prototypes */
+int uses_register(int opcode, int register_num);
+int check_invalid_reg(int register);
+int check_invalid_opcode(int opcode);
+int uses_memory_address(int opcode);
+void print_opcode(int opcode);
+void print_register(int register);
+void print_address(int mem_address, int opcode);
+int check_invalid_instruction(int opcode, int register_one, int register_two,
+                              int address);
+
+/**
+ * check_invalid_instruction to check for invalid memory/program instructions
+ * @param opcode - opcode of instruction
+ * @param reg_one - first register of instruction
+ * @param reg_two - second register of instruction
+ * @param address - memory address or immediate value of instruction
+ * @return 1 if instruction is invalid, 0 otherwise
+ */
+int check_invalid_instruction(int opcode, int reg_one, int reg_two,
+                              int address)
+{
+    /* multiple simple checks for invalid instruction */
+    if (check_invalid_opcode(opcode) == 1 || check_invalid_reg(reg_one) ||
+        check_invalid_reg(reg_two) ||
+        (uses_memory_address(opcode) && address % 4 != 0))
+    {
+        return 1;
+    }
+
+    /* default return val */
+    return 0;
+}
+
+/**
+ * print_instruction to print instruction if valid
+ * @param instruction - instruction word as an int
+ * @return 0 if instruction invalid, otherwise print instruction and return 1
+ */
+unsigned short print_instruction(unsigned int instruction)
+{
+    /* initialize variables */
+    int opcode = 0;
+    int register_one = 0;
+    int register_two = 0;
+    int use_one = 0;
+    int use_two = 0;
+    int address_immediate = 0;
+
+    /* opcode equals 5 leftmost bits of binary instruction */
+    opcode = instruction >> 27;
+    /* shifts instruction 22 bits and bitmasks to obtain register_one value */
+    register_one = (instruction >> 22) & 0x1f;
+    /* shifts instruction 17 bits and bitmasks to obtain register_two value */
+    register_two = (instruction >> 17) & 0x1f;
+    /* uses & bit op to mask 17 rightmost bits and obtain add/imm value */
+    address_immediate = instruction & 0x1ffff;
+
+    /* if the instruction uses register 1, set use_one to 1 */
+    if (uses_register(opcode, 1) == 1)
+        use_one = 1;
+    /* if the instruction uses register 2, set use_one to 1 */
+    if (uses_register(opcode, 2) == 1)
+        use_two = 1;
+
+    /* check whether instruction is invalid or not */
+    if (check_invalid_instruction(opcode, register_one, register_two,
+                                  address_immediate))
+    {
+        return 0;
+    }
+
+    /* continue with function and print opcode if instruction is valid */
+    print_opcode(opcode);
+
+    /* if instruction uses first register, print it */
+    if (use_one)
+        print_register(register_one);
+    if (use_two)
+        /* if instruction uses second register, print it */
+        print_register(register_two);
+    /* if instruction uses memory address or immediate value, print it */
+    if (uses_memory_address(opcode) || opcode == 20)
+        print_address(address_immediate, opcode);
+
+    /* print new line and return 1 to signify instruction is valid */
+    printf("\n");
+    return 1;
+}
+
+/**
+ * load_program to copy program instructions to memory starting at start_addr
+ * @param memory[] - memory array of MAD Raisin
+ * @param program[] - Program array containing instructions to be copied
+ * @param start_addr - start address of memory array
+ * @param pgm_size - size of / # of instructions in program array
+ * @param data_segment_size - # of data values in program arry
+ * @return 0 if parameters invalid, otherwise load instructions from
+ * program into memory and return 1
+ */
+int load_program(unsigned int memory[], const unsigned int program[],
+                 unsigned int start_addr, unsigned short pgm_size,
+                 unsigned short data_segment_size)
+{
+    /* declare variables and set memory size to max # of words */
+    int i;
+    int j;
+    int mem_size = 65536 / 4;
+
+    /* simple checks for invalid parameters */
+    if (start_addr / 4 > mem_size || start_addr % 4 != 0 ||
+        pgm_size > mem_size ||
+        (pgm_size != 0 && pgm_size == data_segment_size) ||
+        (pgm_size > (mem_size - start_addr)))
+    {
+        return 0;
+    }
+
+    /* if parameters valid, loop through program array and copy instructions
+    into memory array, starting at start_addr */
+    for (i = 0, j = start_addr / 4; i < pgm_size; i++, j++)
+    {
+        memory[j] = program[i];
+    }
+
+    /* return 1 for success */
+    return 1;
+}
+
+/**
+ * disassemble function to convert machine language to assembly
+ * language for mad Raisin.
+ * @param memory[] - memory array of MAD Raisin
+ * @param start_addr - start address of memory array
+ * @param pgm_size - size of / # of instructions in program
+ * @param data_segment_size - # of data values in program
+ * @return 0 if parameters invalid, otherwise print values
+ * in desired format and return 1.
+ */
+unsigned short disassemble(const unsigned int memory[],
+                           unsigned int start_addr, unsigned int pgm_size,
+                           unsigned int data_segment_size)
+{
+    /* declare variables and set memory size to max # of words */
+    int i;
+    int j;
+    int opcode;
+    int register_one;
+    int register_two;
+    int address_immediate;
+    int mem_size = 65536 / 4;
+
+    /* simple checks for invalid parameters */
+    if (pgm_size > mem_size || (pgm_size > (mem_size - start_addr)) ||
+        (pgm_size != 0 && pgm_size == data_segment_size) ||
+        start_addr / 4 > mem_size || start_addr % 4 != 0)
+    {
+        return 0;
+    }
+
+    /* loop through instructions to detect if any of them are invalid */
+    for (i = 0, j = start_addr / 4; i < pgm_size; i++, j++)
+    {
+        /* obtain values for each instruction */
+        opcode = memory[j] >> 27;
+        register_one = (memory[j] >> 22) & 0x1f;
+        register_two = (memory[j] >> 17) & 0x1f;
+        address_immediate = memory[j] & 0x1ffff;
+
+        /* check for invalid instruction */
+        if (check_invalid_instruction(opcode, register_one, register_two,
+                                      address_immediate))
+        {
+            return 0;
+        }
+    }
+
+    /* if parameters & instructions are valid, loop through memory array
+    starting at start_addr and print values in desired format */
+    for (i = 0, j = start_addr / 4; i < pgm_size; i++, j++)
+    {
+        /* if array positio is looping through data,
+        print data value in desired format followed by a new line */
+        if (i >= pgm_size - data_segment_size)
+        {
+            printf("%08x", memory[j]);
+            printf("\n");
+        }
+        /* otherwise, prints instruction in desired format */
+        else
+        {
+            print_instruction(memory[j]);
+        }
+    }
+    /* return 1 for success */
+    return 1;
+}
+
+/**
+ * check_invalid_opcode helper function to check if opcode is invalid
+ * @param opcode - opcode of an instruction
+ * @return 1 if opcode is invalid, 0 if opcode is valid
+ */
+int check_invalid_opcode(int opcode)
+{
+    /* if opcode is out of range of mad raisin opcodes, it is invalid */
+    if (opcode > 21 || opcode < 0)
+        return 1;
+    else
+        return 0;
+}
+
+/**
+ * check_invalid_reg helper function to check if register(s) is invalid
+ * @param register_value - one register of an instruction
+ * @return 1 if register is invalid, 0 if register is valid
+ */
+int check_invalid_reg(int register_value)
+{
+    /* if register is out of mad raisin register range (0-17), it is invalid */
+    if (register_value > 17 || register_value < 0)
+        return 1;
+    else
+        return 0;
+}
+
+/**
+ * uses_register helper function to check if opcode uses register
+ * @param opcode - opcode of an instruction
+ * @param register_num - register index (either 1 or 2)
+ * @return 1 if opcode uses register, 0 if not
+ */
+int uses_register(int opcode, int register_num)
+{
+    /* these opcodes do not use any registers */
+    if (opcode == 0 || opcode == 1 || opcode == 21)
+        return 0;
+    /* all other opcodes use at least register 1 */
+    if (register_num == 1)
+        return 1;
+    /* these opcodes do not use register two*/
+    if (register_num == 2 && opcode != 20 && opcode != 19 && opcode != 18 && opcode != 9 && opcode != 10)
+        return 1;
+
+    /* default return value */
+    return 0;
+}
+
+/**
+ * uses_memory_address helper function to check iff opcode uses memory address
+ * @param opcode - opcode of an instruction
+ * @return 1 if opcode uses memory address, 0 otherwise
+ */
+int uses_memory_address(int opcode)
+{
+    /* if opcode is 18, 19, or 21 -> opcode uses mem address */
+    if (opcode == 18 || opcode == 19 || opcode == 21)
+        return 1;
+    /* if op code is not either of those, return 0 */
+    else
+        return 0;
+}
+
+/**
+ * print_opcode helper function to print out corresponding opcode name
+ * @param opcode - opcode of an instruction
+ */
+void print_opcode(int opcode)
+{
+    switch (opcode)
+    {
+    case 0:
+        printf("halt");
+        break;
+    case 1:
+        printf("syscall");
+        break;
+    case 2:
+        printf("add");
+        break;
+    case 3:
+        printf("sub");
+        break;
+    case 4:
+        printf("mul");
+        break;
+    case 5:
+        printf("quot");
+        break;
+    case 6:
+        printf("mod");
+        break;
+    case 7:
+        printf("and");
+        break;
+    case 8:
+        printf("or");
+        break;
+    case 9:
+        printf("neg");
+        break;
+    case 10:
+        printf("not");
+        break;
+    case 11:
+        printf("eql");
+        break;
+    case 12:
+        printf("neq");
+        break;
+    case 13:
+        printf("lt");
+        break;
+    case 14:
+        printf("le");
+        break;
+    case 15:
+        printf("gt");
+        break;
+    case 16:
+        printf("ge");
+        break;
+    case 17:
+        printf("move");
+        break;
+    case 18:
+        printf("lw");
+        break;
+    case 19:
+        printf("sw");
+        break;
+    case 20:
+        printf("li");
+        break;
+    case 21:
+        printf("branch");
+        break;
+    }
+}
+
+/**
+ * print_register helper function to print out corresponding register name
+ * @param register_value - register of an instruction
+ */
+void print_register(int register_value)
+{
+    switch (register_value)
+    {
+    case 0:
+        printf(" R0");
+        break;
+    case 1:
+        printf(" R1");
+        break;
+    case 2:
+        printf(" R2");
+        break;
+    case 3:
+        printf(" R3");
+        break;
+    case 4:
+        printf(" R4");
+        break;
+    case 5:
+        printf(" R5");
+        break;
+    case 6:
+        printf(" R6");
+        break;
+    case 7:
+        printf(" R7");
+        break;
+    case 8:
+        printf(" R8");
+        break;
+    case 9:
+        printf(" R9");
+        break;
+    case 10:
+        printf(" R10");
+        break;
+    case 11:
+        printf(" R11");
+        break;
+    case 12:
+        printf(" R12");
+        break;
+    case 13:
+        printf(" R13");
+        break;
+    case 14:
+        printf(" R14");
+        break;
+    case 15:
+        printf(" R15");
+        break;
+    case 16:
+        printf(" R16");
+        break;
+    case 17:
+        printf(" R17");
+        break;
+    }
+}
+
+/**
+ * print_address helper function to print out mem address or immediate value
+ * @param addr_imm - memory address or immediate value of instruction
+ * @param opcode - opcode of an instruction
+ */
+void print_address(int addr_imm, int opcode)
+{
+    /* if opcode corresponds to load immediate (li), print in decimal form */
+    if (opcode == 20)
+        printf(" %d", addr_imm);
+    /* otherwise the opcode uses memory address, so print with leading
+    zeroes if necessary */
+    else
+        printf(" %5d", addr_imm);
+}

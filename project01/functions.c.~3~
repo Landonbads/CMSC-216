@@ -1,0 +1,35 @@
+#include "functions.h"
+
+/* REMOVE THIS COMMENT, then write your implementations of the functions in
+ * this source file. 
+ * Skeleton versions of the functions already appear below.
+ */
+
+short compare_rectangles(int l1, int w1, int l2, int w2) {
+  int rect1_area = l1* w1;
+  int rect2_area = l2 * w2;
+  if ( l1 < 0 || w1 < 0 || l2 < 0 || w2 < 0 )
+    return -2;
+    else if ( rect1_area < rect2_area ) 
+      return -1;
+    else if ( rect1_area > rect2_area ) 
+      return 1;
+    else
+      return 0;
+}
+
+int ith_factor(int a, int b, int i) {
+  int counter = 0;
+  for ( int z = 1; z <= a && z <= b; i++ ) {
+    if ( a % z == 0 && b % z == 0 ) {
+      counter++;
+    }
+    if ( counter == i )
+      return z;
+}
+  return -1;
+}
+
+long pell(short n) {
+  return 13579;
+}
